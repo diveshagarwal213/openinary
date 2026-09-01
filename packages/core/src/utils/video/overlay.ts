@@ -1,12 +1,12 @@
-import { FullGravityMode } from "types";
+import { FullGravityMode } from "../../types";
 import sharp from "sharp";
 import Ffmpeg from "fluent-ffmpeg";
 import { promisify } from "util";
 import fs from "fs/promises";
-import logger from "utils/logger";
+import logger from "../logger";
 import type { TransformFunction } from "./types";
 import path from "path";
-import { cleanupTempFile } from "routes/transform-helpers";
+import { cleanupTempFile } from "../../routes/transform-helpers";
 
 /**
  * Apply overlay transformation to a video.

@@ -5,7 +5,7 @@ import {
   GravityMode,
   ImageFormat,
   VideoFormat,
-} from "types";
+} from "../types";
 
 export const parseParams = (path: string) => {
   const segments = path.split("/");

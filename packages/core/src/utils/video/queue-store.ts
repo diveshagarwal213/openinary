@@ -1,4 +1,4 @@
-import { VideoTransformParams } from "types";
+import { VideoTransformParams } from "../../types";
 import type { parseParams } from "../parser";
 
 export type JobStatus =

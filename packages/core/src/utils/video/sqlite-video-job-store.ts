@@ -8,7 +8,7 @@ import type {
   JobStatus,
   VideoJobStore,
 } from "./queue-store";
-import { VideoTransformParams } from "types";
+import { VideoTransformParams } from "../../types";
 
 /**
  * Normalize params to a consistent JSON string. Sorts keys alphabetically so

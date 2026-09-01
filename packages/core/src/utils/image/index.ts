@@ -7,7 +7,7 @@ import { applyQuality } from "./quality";
 import { applyRoundCorners } from "./round-corners";
 import { applyOverlayImage } from "./overlay";
 import { applyResize } from "./resize";
-import { ImageTransformParams } from "types";
+import { ImageTransformParams } from "../../types";
 
 // Re-export types for backward compatibility
 export * from "./types";

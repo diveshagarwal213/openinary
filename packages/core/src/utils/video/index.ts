@@ -16,8 +16,8 @@ import { applyQuality } from "./quality";
 import { VideoCommandBuilder } from "./command-builder";
 import type { VideoContext } from "./types";
 import { applyOverlay } from "./overlay";
-import { cleanupTempFile, prepareSourceFile } from "routes/transform-helpers";
-import { CloudStorage, createStorageClient } from "utils/storage";
+import { cleanupTempFile, prepareSourceFile } from "../../routes/transform-helpers";
+import { CloudStorage, createStorageClient } from "../storage";
 
 // Re-export types for backward compatibility
 export * from "./types";

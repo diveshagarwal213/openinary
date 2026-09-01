@@ -9,7 +9,7 @@ import type {
   VideoJobStore,
 } from "./video/queue-store";
 import { JOB_CLEANUP_HOURS, TRANSFORMATION_PRIORITY } from "./video/config";
-import { VideoTransformParams } from "types";
+import { VideoTransformParams } from "../types";
 
 // Re-export types for backward compatibility
 export type { JobStatus };

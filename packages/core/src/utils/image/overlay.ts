@@ -1,6 +1,6 @@
 import sharp from "sharp";
-import { ImageResizeTransformParams, OverlayTransformParams } from "types";
-import logger from "utils/logger";
+import { ImageResizeTransformParams, OverlayTransformParams } from "../../types";
+import logger from "../logger";
 
 /**
  * Apply overlay tranforms to Sharp image.

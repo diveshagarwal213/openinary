@@ -41,10 +41,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '${DOCKER_CPU_LIMIT:-2.0}'
+          cpus: "${DOCKER_CPU_LIMIT:-2.0}"
           memory: ${DOCKER_MEMORY_LIMIT:-4G}
         reservations:
-          cpus: '${DOCKER_CPU_RESERVATION:-0.5}'
+          cpus: "${DOCKER_CPU_RESERVATION:-0.5}"
           memory: ${DOCKER_MEMORY_RESERVATION:-1G}
 
   # Full Stack (API + Web + Nginx) - Profile: full
@@ -99,10 +99,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '${DOCKER_CPU_LIMIT:-2.0}'
+          cpus: "${DOCKER_CPU_LIMIT:-2.0}"
           memory: ${DOCKER_MEMORY_LIMIT:-4G}
         reservations:
-          cpus: '${DOCKER_CPU_RESERVATION:-0.5}'
+          cpus: "${DOCKER_CPU_RESERVATION:-0.5}"
           memory: ${DOCKER_MEMORY_RESERVATION:-1G}
 
 networks:

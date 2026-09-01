@@ -23,7 +23,7 @@ import {
   determineOutputFormat,
 } from "../utils/video/format";
 import path from "path";
-import { CombindedTransformParams } from "types";
+import { CombindedTransformParams } from "../types";
 
 const isVideo = (ext: string | undefined): ext is string =>
   !!ext && VIDEO_FORMATS.has(ext);

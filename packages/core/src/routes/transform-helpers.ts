@@ -13,7 +13,7 @@ import {
   SmartCache,
 } from "../utils/cache";
 import fs from "fs/promises";
-import { CombindedTransformParams, ImageTransformParams, VideoTransformParams } from "types";
+import { CombindedTransformParams, ImageTransformParams, VideoTransformParams } from "../types";
 
 /**
  * Sets the Content-Type header based on file extension or content-type string
