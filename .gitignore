@@ -113,3 +113,6 @@ apps/*/data/
 # AI
 CLAUDE.md
 .claude/
+
+# local
+local.readme.md
