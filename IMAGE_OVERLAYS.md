@@ -22,8 +22,8 @@ This request takes `sample.jpg`, applies `watermark.png` at **50% opacity**, res
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Layer Path** | `l_<path>` | `overlayPath` | String | *Required* | File path of the overlay image. Colons (`:`) convert to slashes (`/`). |
 | **Opacity** | `lo_<0-100>` | `overlayOpacity` | Integer (`0` to `100`) | `50` | Transparency level (0 = completely transparent, 100 = fully opaque). |
-| **Width** | `lw_<px>` | `overlayWidth` | Integer / `auto` | Original width | Target width of the overlay before composition. |
-| **Height** | `lh_<px>` | `overlayHeight` | Integer / `auto` | Original height | Target height of the overlay before composition. |
+| **Width** | `lw_<val>` | `overlayWidth` | Integer (px) or Percentage (`20p`, `0.2`) | Original width | Target width. Omitting height auto-scales height to preserve aspect ratio. |
+| **Height** | `lh_<val>` | `overlayHeight` | Integer (px) or Percentage (`20p`, `0.2`) | Original height | Target height. Omitting width auto-scales width to preserve aspect ratio. |
 | **Gravity** | `lg_<gravity>`| `overlayGravity` | `FullGravityMode` | `center` | Anchor alignment position on the base image/video. |
 | **X Offset** | `lx_<val>` | `overlayXOffset` | Integer (px) or Percentage (`20p`, `0.2`) | `0` | Horizontal offset in pixels or relative percentage of image width. |
 | **Y Offset** | `ly_<val>` | `overlayYOffset` | Integer (px) or Percentage (`20p`, `0.2`) | `0` | Vertical offset in pixels or relative percentage of image height. |

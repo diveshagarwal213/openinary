@@ -8,6 +8,35 @@ import type { TransformFunction } from "./types";
 import path from "path";
 import { cleanupTempFile } from "../../routes/transform-helpers";
 
+function parseDimension(dim: number | string | undefined, mainDim: string): string {
+  if (dim == null || dim === "auto") return "-1";
+  if (typeof dim === "number") return `${dim}`;
+  if (typeof dim === "string" && dim.endsWith("p")) {
+    const pct = parseFloat(dim.replace("p", "")) / 100;
+    return `${mainDim}*${pct}`;
+  }
+  const num = parseFloat(dim);
+  if (!isNaN(num)) {
+    if (dim.includes(".")) {
+      return `${mainDim}*${num}`;
+    }
+    return `${num}`;
+  }
+  return "-1";
+}
+
+function parseOffset(val: number | string | undefined, mainDimension: string): string {
+  if (val == null) return "0";
+  if (typeof val === "number") return `${val}`;
+  if (typeof val === "string" && val.endsWith("p")) {
+    const pct = parseFloat(val.replace("p", "")) / 100;
+    return `(${mainDimension}*${pct})`;
+  }
+  const num = parseFloat(val);
+  if (!isNaN(num)) return `${num}`;
+  return "0";
+}
+
 /**
  * Apply overlay transformation to a video.
  * Supports all overlay related arguments
@@ -106,7 +135,7 @@ export const applyOverlay: TransformFunction = async (
       complexFilters: [
         {
           filter: "scale",
-          options: `${overlayWidth || -1}:${overlayHeight || -1}`,
+          options: `${parseDimension(overlayWidth, "main_w")}:${parseDimension(overlayHeight, "main_h")}`,
           inputs: "1:v",
           outputs: "wm_scaled",
         },
@@ -136,18 +165,6 @@ export const applyOverlay: TransformFunction = async (
     throw new Error("Adding overlay failed.");
   }
 };
-
-function parseOffset(val: number | string | undefined, mainDimension: string): string {
-  if (val == null) return "0";
-  if (typeof val === "number") return `${val}`;
-  if (typeof val === "string" && val.endsWith("p")) {
-    const pct = parseFloat(val.replace("p", "")) / 100;
-    return `(${mainDimension}*${pct})`;
-  }
-  const num = parseFloat(val);
-  if (!isNaN(num)) return `${num}`;
-  return "0";
-}
 
 function overlayPosition(
   gravity: FullGravityMode | undefined,
@@ -219,8 +236,8 @@ async function createTiledWatermark({
   watermarkFile: string;
   canvasWidth: number;
   canvasHeight: number;
-  tileWidth?: number;
-  tileHeight?: number;
+  tileWidth?: number | string;
+  tileHeight?: number | string;
   spacing?: number;
   x?: number | string;
   y?: number | string;
@@ -232,22 +249,38 @@ async function createTiledWatermark({
   if (!metadata || !metadata.height || !metadata.width)
     throw new Error("Processing tiled watermark failed.");
 
+  let calcTileW: number | undefined = undefined;
+  if (typeof tileWidth === "number") {
+    calcTileW = tileWidth;
+  } else if (typeof tileWidth === "string") {
+    const pct = parseFloat(tileWidth.replace("p", "")) / 100;
+    calcTileW = Math.round(canvasWidth * (isNaN(pct) ? 0 : pct));
+  }
+
+  let calcTileH: number | undefined = undefined;
+  if (typeof tileHeight === "number") {
+    calcTileH = tileHeight;
+  } else if (typeof tileHeight === "string") {
+    const pct = parseFloat(tileHeight.replace("p", "")) / 100;
+    calcTileH = Math.round(canvasHeight * (isNaN(pct) ? 0 : pct));
+  }
+
   const watermarkWidth =
-    tileWidth ||
-    (tileHeight
-      ? Math.floor((tileHeight / metadata.height) * metadata.width)
+    calcTileW ||
+    (calcTileH
+      ? Math.floor((calcTileH / metadata.height) * metadata.width)
       : metadata.width);
   const watermarkHeight =
-    tileHeight ||
-    (tileWidth
-      ? Math.floor((tileWidth / metadata.width) * metadata.height)
+    calcTileH ||
+    (calcTileW
+      ? Math.floor((calcTileW / metadata.width) * metadata.height)
       : metadata.height);
 
   const watermarkResized = await watermark
     .resize({
       width: watermarkWidth,
       height: watermarkHeight,
-      fit: tileWidth && tileHeight ? "fill" : "inside",
+      fit: calcTileW && calcTileH ? "fill" : "inside",
     })
     .ensureAlpha()
     .modulate({

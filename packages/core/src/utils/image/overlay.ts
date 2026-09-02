@@ -16,27 +16,65 @@ export const applyOverlayImage = async (
     const baseImageMetaData = await image.metadata();
     const overlayImageMetaData = await overlayImage.metadata();
 
-    const width = Math.min(
-      params.width || baseImageMetaData.width || 0,
-      params.overlayWidth || overlayImageMetaData.width || 0,
-    );
-    const height = Math.min(
-      params.height || baseImageMetaData.height || 0,
-      params.overlayHeight || overlayImageMetaData.height || 0,
-    );
+    const baseW = params.width || baseImageMetaData.width || 0;
+    const baseH = params.height || baseImageMetaData.height || 0;
+    const ow = overlayImageMetaData.width || 1;
+    const oh = overlayImageMetaData.height || 1;
+    const overlayAspect = ow / oh;
+
+    // Calculate specified width
+    let calcW: number | undefined = undefined;
+    if (typeof params.overlayWidth === "number") {
+      calcW = params.overlayWidth;
+    } else if (typeof params.overlayWidth === "string") {
+      const pct = parseFloat(params.overlayWidth.replace("p", "")) / 100;
+      calcW = Math.round(baseW * pct);
+    }
+
+    // Calculate specified height
+    let calcH: number | undefined = undefined;
+    if (typeof params.overlayHeight === "number") {
+      calcH = params.overlayHeight;
+    } else if (typeof params.overlayHeight === "string") {
+      const pct = parseFloat(params.overlayHeight.replace("p", "")) / 100;
+      calcH = Math.round(baseH * pct);
+    }
+
+    // Preserve aspect ratio if only one dimension is specified
+    let targetW: number;
+    let targetH: number;
+
+    if (calcW !== undefined && calcH !== undefined) {
+      targetW = calcW;
+      targetH = calcH;
+    } else if (calcW !== undefined) {
+      targetW = calcW;
+      targetH = Math.max(1, Math.round(calcW / overlayAspect));
+    } else if (calcH !== undefined) {
+      targetH = calcH;
+      targetW = Math.max(1, Math.round(calcH * overlayAspect));
+    } else {
+      targetW = ow;
+      targetH = oh;
+    }
+
+    // Cap to base image dimensions if needed
+    if (baseW > 0) targetW = Math.min(targetW, baseW);
+    if (baseH > 0) targetH = Math.min(targetH, baseH);
 
     const overlayResizedBuffer = await overlayImage
       .resize({
-        width,
-        height,
+        width: targetW,
+        height: targetH,
+        fit: "fill",
       })
       .ensureAlpha()
       .composite([
         {
           input: {
             create: {
-              width,
-              height,
+              width: targetW,
+              height: targetH,
               channels: 4,
               background: {
                 r: 255,
@@ -54,9 +92,6 @@ export const applyOverlayImage = async (
       ])
       .png()
       .toBuffer();
-
-    const baseW = params.width || baseImageMetaData.width || 0;
-    const baseH = params.height || baseImageMetaData.height || 0;
 
     let xOffset: number | undefined = undefined;
     if (typeof params.overlayXOffset === "number") {

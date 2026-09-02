@@ -52,8 +52,8 @@ const TRANSFORM_VALUE_PATTERNS: Readonly<Record<TransformKey, RegExp>> = {
   lt: /^(true|1|\d+)$/,
   lx: /^-?\d+$|^-?\d+p$|^-?\d+(?:\.\d+)?$/,
   ly: /^-?\d+$|^-?\d+p$|^-?\d+(?:\.\d+)?$/,
-  lw: /^\d+$|^auto$/,
-  lh: /^\d+$|^auto$/,
+  lw: /^\d+$|^auto$|^\d+p$|^\d+(?:\.\d+)?$/,
+  lh: /^\d+$|^auto$|^\d+p$|^\d+(?:\.\d+)?$/,
   lg: new RegExp(`^(${Object.values(FullGravityMode).join("|")})$`, "i"),
   ls: /^\d+$/,
 };
@@ -274,19 +274,37 @@ const parseTransform = (segment: string): CombindedTransformParams => {
         break;
       case "lw":
         try {
-          params.overlayWidth = value === "auto" ? undefined : parseInt(value);
+          if (value === "auto") {
+            params.overlayWidth = undefined;
+          } else if (value.endsWith("p")) {
+            params.overlayWidth = value;
+          } else if (value.startsWith("0.") || value.includes(".")) {
+            const num = parseFloat(value);
+            params.overlayWidth = `${num * 100}p`;
+          } else {
+            params.overlayWidth = parseInt(value);
+          }
         } catch {
           throw new Error(
-            "Parsing overlay width failed. Make sure it is an integer or 'auto'.",
+            "Parsing overlay width failed. Make sure it is an integer, percentage (e.g. 20p or 0.2), or 'auto'.",
           );
         }
         break;
       case "lh":
         try {
-          params.overlayHeight = value === "auto" ? undefined : parseInt(value);
+          if (value === "auto") {
+            params.overlayHeight = undefined;
+          } else if (value.endsWith("p")) {
+            params.overlayHeight = value;
+          } else if (value.startsWith("0.") || value.includes(".")) {
+            const num = parseFloat(value);
+            params.overlayHeight = `${num * 100}p`;
+          } else {
+            params.overlayHeight = parseInt(value);
+          }
         } catch {
           throw new Error(
-            "Parsing overlay width failed. Make sure it is an integer or 'auto'.",
+            "Parsing overlay height failed. Make sure it is an integer, percentage (e.g. 20p or 0.2), or 'auto'.",
           );
         }
         break;

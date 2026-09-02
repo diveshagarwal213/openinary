@@ -46,8 +46,8 @@ export interface ImageResizeTransformParams {
 export interface OverlayTransformParams {
   overlayPath?: string;
   overlayOpacity?: number;
-  overlayWidth?: number;
-  overlayHeight?: number;
+  overlayWidth?: number | string;
+  overlayHeight?: number | string;
   overlayGravity?: FullGravityMode;
   overlayXOffset?: number | string;
   overlayYOffset?: number | string;
