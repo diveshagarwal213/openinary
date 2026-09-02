@@ -42,8 +42,8 @@ export interface OverlayTransformParams {
   overlayWidth?: number;
   overlayHeight?: number;
   overlayGravity?: FullGravityMode;
-  overlayXOffset?: number;
-  overlayYOffset?: number;
+  overlayXOffset?: number | string;
+  overlayYOffset?: number | string;
   overlayTiled?: boolean;
   overlayTileSpacing?: number;
 }

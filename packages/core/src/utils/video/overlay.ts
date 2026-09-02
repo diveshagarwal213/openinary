@@ -137,11 +137,25 @@ export const applyOverlay: TransformFunction = async (
   }
 };
 
+function parseOffset(val: number | string | undefined, mainDimension: string): string {
+  if (val == null) return "0";
+  if (typeof val === "number") return `${val}`;
+  if (typeof val === "string" && val.endsWith("p")) {
+    const pct = parseFloat(val.replace("p", "")) / 100;
+    return `(${mainDimension}*${pct})`;
+  }
+  const num = parseFloat(val);
+  if (!isNaN(num)) return `${num}`;
+  return "0";
+}
+
 function overlayPosition(
   gravity: FullGravityMode | undefined,
-  left = 0,
-  top = 0,
+  leftInput: number | string = 0,
+  topInput: number | string = 0,
 ) {
+  const left = parseOffset(leftInput, "main_w");
+  const top = parseOffset(topInput, "main_h");
   switch (gravity) {
     case "northwest":
       return { x: `${left}`, y: `${top}` };
@@ -208,8 +222,8 @@ async function createTiledWatermark({
   tileWidth?: number;
   tileHeight?: number;
   spacing?: number;
-  x?: number;
-  y?: number;
+  x?: number | string;
+  y?: number | string;
 }): Promise<Buffer<ArrayBufferLike>> {
   const watermark = await sharp(watermarkFile);
 
@@ -244,8 +258,24 @@ async function createTiledWatermark({
 
   const composites = [];
 
-  for (let top = y; top < canvasHeight; top += watermarkHeight + spacing) {
-    for (let left = x; left < canvasWidth; left += watermarkWidth + spacing) {
+  let xOffset = 0;
+  if (typeof x === "number") {
+    xOffset = x;
+  } else if (typeof x === "string") {
+    const pct = parseFloat(x.replace("p", "")) / 100;
+    xOffset = Math.round(canvasWidth * (isNaN(pct) ? 0 : pct));
+  }
+
+  let yOffset = 0;
+  if (typeof y === "number") {
+    yOffset = y;
+  } else if (typeof y === "string") {
+    const pct = parseFloat(y.replace("p", "")) / 100;
+    yOffset = Math.round(canvasHeight * (isNaN(pct) ? 0 : pct));
+  }
+
+  for (let top = yOffset; top < canvasHeight; top += watermarkHeight + spacing) {
+    for (let left = xOffset; left < canvasWidth; left += watermarkWidth + spacing) {
       composites.push({
         input: watermarkResized,
         left,

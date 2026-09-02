@@ -1,0 +1,32 @@
+---
+title: "Image Overlays & Watermarking"
+description: "Layer logos, badges, watermarks, and tiled patterns onto images and videos"
+---
+
+Image overlays allow you to composite layers (such as brand logos, watermarks, badges, or protective patterns) onto base images or videos dynamically via URL parameters.
+
+## Parameters Reference
+
+| Parameter | URL Key | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Layer Path** | `l_<path>` | String | File path of overlay image (`:` converts to `/`) |
+| **Opacity** | `lo_<0-100>` | Integer | Transparency level (0 = transparent, 100 = opaque) |
+| **Width** | `lw_<px>` | Integer | Target width of the overlay |
+| **Height** | `lh_<px>` | Integer | Target height of the overlay |
+| **Gravity** | `lg_<gravity>` | Enum | Anchor position (`nw`, `n`, `ne`, `w`, `c`, `e`, `sw`, `s`, `se`) |
+| **X Offset** | `lx_<px>` | Integer | Horizontal offset from anchor |
+| **Y Offset** | `ly_<px>` | Integer | Vertical offset from anchor |
+| **Tiled** | `lt_true` | Boolean | Tile overlay across canvas |
+| **Tile Spacing** | `ls_<px>` | Integer | Pixel spacing between tiles |
+
+## Examples
+
+### Watermark Badge
+```http
+GET /t/l_watermark.png,lo_50,lw_150,lg_southeast,lx_20,ly_20/photo.jpg
+```
+
+### Tiled Pattern
+```http
+GET /t/l_pattern.png,lo_20,lt_true,ls_30/document.png
+```

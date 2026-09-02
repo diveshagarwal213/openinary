@@ -24,6 +24,12 @@ import {
 } from "../utils/video/format";
 import path from "path";
 import { CombindedTransformParams } from "../types";
+import {
+  ApplicationError,
+  ValidationError,
+  TransformationError,
+  TransformationIncompleteError,
+} from "../utils/errors";
 
 const isVideo = (ext: string | undefined): ext is string =>
   !!ext && VIDEO_FORMATS.has(ext);

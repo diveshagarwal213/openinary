@@ -50,8 +50,8 @@ const TRANSFORM_VALUE_PATTERNS: Readonly<Record<TransformKey, RegExp>> = {
   l: /^[\w-]+(?:\:[\w-]+)*\.\w+$/,
   lo: /^(100|[1-9]\d|[0-9])$/,
   lt: /^(true|1|\d+)$/,
-  lx: /^\d+$/,
-  ly: /^\d+$/,
+  lx: /^-?\d+$|^-?\d+p$|^-?\d+(?:\.\d+)?$/,
+  ly: /^-?\d+$|^-?\d+p$|^-?\d+(?:\.\d+)?$/,
   lw: /^\d+$|^auto$/,
   lh: /^\d+$|^auto$/,
   lg: new RegExp(`^(${Object.values(FullGravityMode).join("|")})$`, "i"),
@@ -233,19 +233,33 @@ const parseTransform = (segment: string): CombindedTransformParams => {
         break;
       case "lx":
         try {
-          params.overlayXOffset = parseInt(value);
+          if (typeof value === "string" && value.endsWith("p")) {
+            params.overlayXOffset = value;
+          } else if (typeof value === "string" && (value.startsWith("0.") || value.includes("."))) {
+            const num = parseFloat(value);
+            params.overlayXOffset = `${num * 100}p`;
+          } else {
+            params.overlayXOffset = parseInt(value);
+          }
         } catch {
           throw new Error(
-            "Parsing overlay x offset failed. Make sure it is an integer.",
+            "Parsing overlay x offset failed. Make sure it is an integer or percentage (e.g. 20p).",
           );
         }
         break;
       case "ly":
         try {
-          params.overlayYOffset = parseInt(value);
+          if (typeof value === "string" && value.endsWith("p")) {
+            params.overlayYOffset = value;
+          } else if (typeof value === "string" && (value.startsWith("0.") || value.includes("."))) {
+            const num = parseFloat(value);
+            params.overlayYOffset = `${num * 100}p`;
+          } else {
+            params.overlayYOffset = parseInt(value);
+          }
         } catch {
           throw new Error(
-            "Parsing overlay y offset failed. Make sure it is an integer.",
+            "Parsing overlay y offset failed. Make sure it is an integer or percentage (e.g. 20p).",
           );
         }
         break;
@@ -294,13 +308,11 @@ const parseTransform = (segment: string): CombindedTransformParams => {
     }
   }
 
-  if (
-    (params.overlayXOffset != null && params.overlayYOffset == null) ||
-    (params.overlayXOffset == null && params.overlayYOffset != null)
-  )
-    throw new Error(
-      "Validating overlay offset failed. X and Y have to be set.",
-    );
+  if (params.overlayXOffset != null && params.overlayYOffset == null) {
+    params.overlayYOffset = 0;
+  } else if (params.overlayXOffset == null && params.overlayYOffset != null) {
+    params.overlayXOffset = 0;
+  }
 
   return params;
 };

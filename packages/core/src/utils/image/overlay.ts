@@ -55,13 +55,32 @@ export const applyOverlayImage = async (
       .png()
       .toBuffer();
 
+    const baseW = params.width || baseImageMetaData.width || 0;
+    const baseH = params.height || baseImageMetaData.height || 0;
+
+    let xOffset: number | undefined = undefined;
+    if (typeof params.overlayXOffset === "number") {
+      xOffset = params.overlayXOffset;
+    } else if (typeof params.overlayXOffset === "string") {
+      const pct = parseFloat(params.overlayXOffset.replace("p", "")) / 100;
+      xOffset = Math.round(baseW * pct);
+    }
+
+    let yOffset: number | undefined = undefined;
+    if (typeof params.overlayYOffset === "number") {
+      yOffset = params.overlayYOffset;
+    } else if (typeof params.overlayYOffset === "string") {
+      const pct = parseFloat(params.overlayYOffset.replace("p", "")) / 100;
+      yOffset = Math.round(baseH * pct);
+    }
+
     const output = await image
       .composite([
         {
           input: overlayResizedBuffer,
           gravity: params.overlayGravity,
-          top: params.overlayYOffset,
-          left: params.overlayXOffset,
+          top: yOffset,
+          left: xOffset,
           tile: params.overlayTiled,
         },
       ])

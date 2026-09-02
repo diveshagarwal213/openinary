@@ -1,4 +1,4 @@
-class ApplicationError extends Error {
+export class ApplicationError extends Error {
   name = "Application Error";
   code;
 
@@ -8,7 +8,7 @@ class ApplicationError extends Error {
   }
 }
 
-class ValidationError extends ApplicationError {
+export class ValidationError extends ApplicationError {
   name = "ValidationError";
 
   constructor(message: string, code?: number) {
@@ -16,7 +16,7 @@ class ValidationError extends ApplicationError {
   }
 }
 
-class TransformationError extends ApplicationError {
+export class TransformationError extends ApplicationError {
   name = "TransformationError";
 
   constructor(message: string, code?: number) {
@@ -24,7 +24,7 @@ class TransformationError extends ApplicationError {
   }
 }
 
-class TransformationIncompleteError extends ApplicationError {
+export class TransformationIncompleteError extends ApplicationError {
   name = "TransformationIncompleteError";
 
   constructor(message: string, code?: number) {
