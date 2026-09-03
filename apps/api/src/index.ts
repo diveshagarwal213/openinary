@@ -108,9 +108,10 @@ app.use("/video-status", publicRateLimit);
 app.use("/video-status/*", publicRateLimit);
 app.route("/video-status", videoStatus);
 
-// Image transformation route is public for easy access to transformed images
-app.use("/t", publicRateLimit);
-app.use("/t/*", publicRateLimit);
+// Image transformation route - requires authentication (session cookie or API key)
+// The dashboard sends session cookies automatically; external consumers use /authenticated (signed URLs)
+app.use("/t", publicRateLimit, apiKeyAuth);
+app.use("/t/*", publicRateLimit, apiKeyAuth);
 app.route("/t", transform);
 
 // Original file download route (public, consistent with /t/)
