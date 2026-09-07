@@ -6,6 +6,7 @@ import { applyRotation } from "./rotation";
 import { applyQuality } from "./quality";
 import { applyRoundCorners } from "./round-corners";
 import { applyOverlayImage } from "./overlay";
+import { applyExtract } from "./extract";
 import { applyResize } from "./resize";
 import { ImageTransformParams } from "../../types";
 
@@ -56,8 +57,25 @@ export const transformImage = async (
     }
   }
 
-  // 3. Apply resize (if width or height specified)
-  if (params.width || params.height) {
+  // 3. Apply position-based crop or gravity-based resize
+  if (
+    params.crop === "crop" &&
+    params.x != null &&
+    params.y != null &&
+    params.width &&
+    params.height
+  ) {
+    // Position-based crop: extract exact region at (x, y) with w×h.
+    // When x/y are specified, gravity is intentionally ignored — manual
+    // coordinates override automatic positioning (matches Cloudinary).
+    image = await applyExtract(
+      image,
+      params.x,
+      params.y,
+      params.width,
+      params.height,
+    );
+  } else if (params.width || params.height) {
     image = await applyResize(
       image,
       params.crop || "fill",

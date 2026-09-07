@@ -46,6 +46,8 @@ GET /t/{transformations}/{path}
 | [`ar`](#ar)     | aspect ratio  | Crop to a given ratio (`W:H`)               |
 | [`a`](#a)       | angle         | Rotation angle or `auto`                    |
 | [`g`](#g)       | gravity       | Focal point for cropping                    |
+| [`x`](#x)       | x offset      | Horizontal crop offset (pixels or %)        |
+| [`y`](#y)       | y offset      | Vertical crop offset (pixels or %)          |
 | [`b`](#b)       | background    | Background color (hex)                      |
 | [`r`](#r)       | round corners | Radius in pixels, per-corner list, or `max` |
 | [`q`](#q-image) | quality       | Compression level (1–100)                   |
@@ -120,6 +122,33 @@ GET /t/{transformations}/{path}
   Background color for `c_pad` (padding fill), `a_<angle>` (rotation fill), and `r_<radius>` (corner fill). Use `rgb:` followed by a 6-digit hex value.
 
 `b_rgb:ffffff` (white) · `b_rgb:000000` (black) · `b_rgb:f5f5f5` (light gray)
+
+</ParamField>
+
+<a id="x"></a>
+<ParamField path="x" type="integer | decimal | percentage">
+  Horizontal offset for position-based cropping. Used with `c_crop` to define where the crop region starts.
+
+| Format      | Example     | Meaning                        |
+| ----------- | ----------- | ------------------------------ |
+| Pixel       | `x_100`     | 100px from the left edge       |
+| Decimal     | `x_0.3`     | 30% of the image width         |
+| Percentage  | `x_30p`     | 30% of the image width         |
+
+  <Note>
+    `x` and `y` only take effect with `c_crop`. When specified, the `g` (gravity) parameter is ignored — manual coordinates override automatic positioning.
+  </Note>
+</ParamField>
+
+<a id="y"></a>
+<ParamField path="y" type="integer | decimal | percentage">
+  Vertical offset for position-based cropping. Used with `c_crop` to define where the crop region starts.
+
+| Format      | Example     | Meaning                        |
+| ----------- | ----------- | ------------------------------ |
+| Pixel       | `y_50`      | 50px from the top edge         |
+| Decimal     | `y_0.2`     | 20% of the image height        |
+| Percentage  | `y_20p`     | 20% of the image height        |
 
 </ParamField>
 
@@ -204,6 +233,16 @@ GET /t/ar_16:9,w_1920/banner.jpg
 ```http
 GET /t/w_1200,f_avif,q_80/photo.jpg
 ```
+
+</Tab>
+
+<Tab title="Position crop">
+
+```http
+GET /t/c_crop,w_300,h_300,x_100,y_50/image.jpg
+```
+
+Extracts a 300×300 region starting at pixel (100, 50) from the top-left.
 
 </Tab>
 </Tabs>

@@ -34,6 +34,8 @@ export interface ImageResizeTransformParams {
   background?: string;
   width?: number;
   height?: number;
+  x?: number | string; // crop x offset: pixel (integer) or percentage ("30p")
+  y?: number | string; // crop y offset: pixel (integer) or percentage ("30p")
 }
 
 export interface OverlayTransformParams {
@@ -65,6 +67,8 @@ export interface VideoTransformParams extends OverlayTransformParams {
   height?: number;
   crop?: CropMode;
   gravity?: GravityMode;
+  x?: number | string; // crop x offset: pixel (integer) or percentage ("30p")
+  y?: number | string; // crop y offset: pixel (integer) or percentage ("30p")
   quality?: number | "auto";
   thumbnail?: boolean;
   thumbnailTime?: number;

@@ -42,6 +42,8 @@ const TRANSFORM_VALUE_PATTERNS: Readonly<Record<TransformKey, RegExp>> = {
   ar: /^\d+:\d+$|^\d+(?:\.\d+)?$/,
   b: /^(transparent|white|black|rgb:[0-9a-fA-F]{3,8}|#?[0-9a-fA-F]{3,8})$/,
   bg: /^(transparent|white|black|rgb:[0-9a-fA-F]{3,8}|#?[0-9a-fA-F]{3,8})$/,
+  x: /^\d+$|^0?\.\d+$|^\d+p$/,   // crop x offset: integer, decimal (0.0–1.0), or percentage (e.g. 30p)
+  y: /^\d+$|^0?\.\d+$|^\d+p$/,   // crop y offset: same as x
   so: /^\d+(?:\.\d+)?$/,
   eo: /^\d+(?:\.\d+)?$/,
   t: /^(true|1|\d+)$/,
@@ -93,6 +95,8 @@ type TransformKey =
   | "ar"
   | "b"
   | "bg"
+  | "x" // crop x offset
+  | "y" // crop y offset
   | "so"
   | "eo"
   | "t" // FIX H12: Add thumbnail parameter
@@ -178,6 +182,38 @@ const parseTransform = (segment: string): CombindedTransformParams => {
       case "ar":
         // Aspect ratio, usually like "16:9" already
         params.aspect = value;
+        break;
+      case "x":
+        try {
+          if (typeof value === "string" && value.endsWith("p")) {
+            params.x = value;
+          } else if (typeof value === "string" && value.includes(".")) {
+            const num = parseFloat(value);
+            params.x = `${Math.round(num * 100)}p`;
+          } else {
+            params.x = parseInt(value);
+          }
+        } catch {
+          throw new Error(
+            "Parsing x offset failed. Make sure it is an integer, decimal (e.g. 0.3), or percentage (e.g. 30p).",
+          );
+        }
+        break;
+      case "y":
+        try {
+          if (typeof value === "string" && value.endsWith("p")) {
+            params.y = value;
+          } else if (typeof value === "string" && value.includes(".")) {
+            const num = parseFloat(value);
+            params.y = `${Math.round(num * 100)}p`;
+          } else {
+            params.y = parseInt(value);
+          }
+        } catch {
+          throw new Error(
+            "Parsing y offset failed. Make sure it is an integer, decimal (e.g. 0.3), or percentage (e.g. 30p).",
+          );
+        }
         break;
       case "b":
       case "bg":

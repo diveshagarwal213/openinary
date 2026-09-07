@@ -11,6 +11,7 @@ src/utils/image/
 ├── gravity.ts         # Position and gravity management
 ├── background.ts      # Background color management
 ├── aspect-ratio.ts    # Aspect ratio transformation
+├── extract.ts         # Position-based crop (x,y coordinates)
 ├── resize.ts          # Resizing and crop modes
 ├── rotation.ts        # Image rotation
 └── quality.ts         # Quality management

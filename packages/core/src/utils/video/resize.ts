@@ -1,6 +1,24 @@
 import type { TransformFunction } from "./types";
 
 /**
+ * Resolve an x/y offset value to an ffmpeg expression string.
+ * - number → pixel value as string
+ * - string ending with "p" (e.g. "30p") → ffmpeg expression using iw/ih
+ * - other string → treated as pixel value
+ */
+const resolveVideoOffset = (
+  value: number | string | undefined,
+  dimension: "iw" | "ih",
+): string => {
+  if (value === undefined) return "0";
+  if (typeof value === "string" && value.endsWith("p")) {
+    const pct = parseFloat(value) / 100;
+    return `${dimension}*${pct}`;
+  }
+  return String(value);
+};
+
+/**
  * Apply resize transformation to a video
  * Supports multiple crop modes: fill, crop, fit, scale, pad
  */
@@ -9,7 +27,7 @@ export const applyResize: TransformFunction = (
   outputVideoStream,
   context,
 ) => {
-  const { width, height, crop } = context.params;
+  const { width, height, crop, x, y } = context.params;
 
   // One dimension is enough - see the scale filter below. Requiring both
   // meant w_303 alone fell through untouched: the video was still fully
@@ -26,6 +44,39 @@ export const applyResize: TransformFunction = (
   // non-square SAR came out with the requested pixel dimensions but was
   // still displayed at the original shape (w_300,h_300 on a 16:9 source
   // encoded 300x300 with SAR 16:9, i.e. a 533x300 picture in every player).
+
+  // Position-based crop: when x/y are specified with c_crop, extract the
+  // exact region at (x, y) without pre-scaling. This matches Cloudinary's
+  // behavior where manual coordinates override automatic positioning.
+  if (
+    crop === "crop" &&
+    x != null &&
+    y != null &&
+    valid(width) &&
+    valid(height)
+  ) {
+    const xExpr = resolveVideoOffset(x, "iw");
+    const yExpr = resolveVideoOffset(y, "ih");
+
+    return {
+      complexFilters: [
+        {
+          filter: "crop",
+          options: `${width}:${height}:${xExpr}:${yExpr}`,
+          inputs: outputVideoStream,
+          outputs: "cropped",
+        },
+        {
+          filter: "setsar",
+          options: "1",
+          inputs: "cropped",
+          outputs: "resizesar",
+        },
+      ],
+      outputVideoStream: "resizesar",
+    };
+  }
+
   // Cropping needs a box to crop to, so it still takes both dimensions;
   // with only one given, fall through to the plain scale below.
   if ((crop === "fill" || crop === "crop") && valid(width) && valid(height)) {
