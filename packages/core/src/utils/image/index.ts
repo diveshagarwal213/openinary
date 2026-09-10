@@ -45,6 +45,14 @@ export const transformImage = async (
   // 1. Apply rotation (if specified)
   if (params.rotate) {
     image = applyRotation(image, params.rotate, params.background);
+    // Rotation swaps width/height (e.g. 90°/270°). Sharp's .metadata() on a
+    // lazy pipeline returns the *pre-rotation* dimensions, so applyExtract
+    // would clamp its bounds to the wrong size and Sharp would throw
+    // "extract_area: bad extract area" when the chained ops finally execute.
+    // Materialise now so downstream operations see the real rotated dimensions.
+    if (params.crop === "crop" && params.x != null && params.y != null) {
+      image = sharp(await image.toBuffer());
+    }
   }
 
   // 2. Apply aspect ratio (if specified)
@@ -75,6 +83,12 @@ export const transformImage = async (
       params.width,
       params.height,
     );
+    // Sharp cannot chain .composite() onto a pipeline that has a pending
+    // .extract() — the operations must be separated by a materialisation step.
+    // Flush the extract to a buffer so the overlay sees a clean pipeline.
+    if (params.overlayPath) {
+      image = sharp(await image.toBuffer());
+    }
   } else if (params.width || params.height) {
     image = await applyResize(
       image,
