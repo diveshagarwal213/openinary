@@ -12,7 +12,7 @@
 
 import { posix as path } from "node:path";
 import { RPCHandler } from "@orpc/server/fetch";
-import { eq, like } from "drizzle-orm";
+import { eq, inArray, like } from "drizzle-orm";
 import type { Context, Next } from "hono";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -32,6 +32,7 @@ import {
   trackFeature,
 } from "../api/lib/autumn.js";
 import {
+  assertOwnsBucket,
   clearCacheStats,
   deleteBucket,
   getActiveBucketId,
@@ -455,6 +456,213 @@ app.use("/admin/*", requireAdmin);
  * (an id that is stale in one file locks the real admin out, or worse).
  */
 app.get("/admin/check", (c) => c.body(null, 204));
+
+// --- admin: moderation browser ---
+
+/**
+ * The file browser behind /users/{id}/buckets/{bucketId} in apps/admin, for
+ * checking what an account actually hosts. Read straight from R2 rather than
+ * through the public CDN, on purpose: a moderator most needs to look at an
+ * account that is already suspended (the CDN answers 403 for it), and being
+ * looked at must not bill the customer a cdn_request.
+ *
+ * The bucket is checked against the user in the URL, so a mistyped id can't
+ * land the browser in someone else's tenant root.
+ */
+async function adminTenantRoot(c: TenantCtx): Promise<string | null> {
+  const { userId, bucketId } = c.req.param();
+  try {
+    await assertOwnsBucket(userId, bucketId);
+  } catch {
+    return null;
+  }
+  return tenantRootFor(userId, bucketId);
+}
+
+/**
+ * GET /admin/storage?users=a,b,c - each account's footprint across all of its
+ * buckets, for the user list. The per-bucket snapshot in Postgres is only
+ * ever refreshed by the customer pressing "Recalculate" (see schema/bucket.ts),
+ * which almost nobody does, so the list read 0 B for everyone. This refreshes
+ * any bucket whose snapshot is older than an hour straight from R2 and writes
+ * it back, so the fiche and the customer's own Storage tab agree with it.
+ *
+ * Originals only ("public/{tenantRoot}/" is one prefix per bucket, cheap);
+ * the cache columns are left alone, since "cache/" has no per-tenant prefix.
+ *
+ * ponytail: one R2 list per stale bucket per page of the user list, in
+ * parallel; a tenant with 100k objects is 100 subrequests. Move to a cron if
+ * a page ever brushes the Worker's 1000-subrequest budget.
+ */
+const FOOTPRINT_MAX_AGE_MS = 60 * 60 * 1000;
+app.get("/admin/storage", async (c) => {
+  const ids = (c.req.query("users") ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .slice(0, 200);
+  const footprint: Record<string, { bytes: number; files: number }> = {};
+  for (const id of ids) footprint[id] = { bytes: 0, files: 0 };
+  if (ids.length === 0) return c.json(footprint);
+
+  try {
+    const rows = await db
+      .select({
+        id: bucket.id,
+        userId: bucket.userId,
+        storageBytes: bucket.storageBytes,
+        storageFileCount: bucket.storageFileCount,
+        statsUpdatedAt: bucket.statsUpdatedAt,
+      })
+      .from(bucket)
+      .where(inArray(bucket.userId, ids));
+
+    const now = Date.now();
+    await Promise.all(
+      rows.map(async (row) => {
+        let { storageBytes, storageFileCount } = row;
+        const fresh =
+          row.statsUpdatedAt &&
+          now - row.statsUpdatedAt.getTime() < FOOTPRINT_MAX_AGE_MS;
+        if (!fresh) {
+          const originals = (
+            await r2.listAll(
+              c.env.MEDIA_BUCKET,
+              `public/${tenantRootFor(row.userId, row.id)}/`,
+            )
+          ).filter((o) => !o.key.endsWith("/"));
+          storageBytes = originals.reduce((sum, o) => sum + o.size, 0);
+          storageFileCount = originals.length;
+          await db
+            .update(bucket)
+            .set({ storageBytes, storageFileCount, statsUpdatedAt: new Date() })
+            .where(eq(bucket.id, row.id));
+        }
+        const total = footprint[row.userId];
+        total.bytes += storageBytes;
+        total.files += storageFileCount;
+      }),
+    );
+    return c.json(footprint);
+  } catch (error) {
+    console.error("Failed to compute storage footprint for admin", error);
+    return c.json({ error: "Failed to compute storage footprint" }, 500);
+  }
+});
+
+// GET /admin/users/:userId/buckets/:bucketId/storage?path= - one directory
+// level, same shape as the customer's own GET /storage.
+app.get("/admin/users/:userId/buckets/:bucketId/storage", async (c) => {
+  const tenantRoot = await adminTenantRoot(c);
+  if (!tenantRoot)
+    return c.json({ error: "Not found", message: "Bucket not found" }, 404);
+  const levelPath = r2.normalizeLevelPath(c.req.query("path") ?? "");
+  if (levelPath === null)
+    return c.json({ error: "Bad request", message: "Invalid path" }, 400);
+  try {
+    const { folderNames, files } = await r2.listLevel(
+      c.env.MEDIA_BUCKET,
+      tenantRoot,
+      levelPath,
+    );
+    const folders = folderNames.map((name) => ({
+      name,
+      path: levelPath ? `${levelPath}/${name}` : name,
+    }));
+    return c.json({ path: levelPath, folders, files });
+  } catch (error) {
+    console.error("Failed to list bucket for admin", error);
+    return c.json({ error: "Failed to list storage contents" }, 500);
+  }
+});
+
+/**
+ * GET /admin/users/:userId/buckets/:bucketId/file/{path}[?thumb=1] - the
+ * bytes of one original. With ?thumb=1 an image or video is answered with
+ * the dashboard thumbnail the customer's browser already generated when there
+ * is one (a few KB of webp instead of the full original, which is what makes
+ * a grid of a thousand files bearable), falling back to the original.
+ *
+ * Ranged like the CDN so a <video> can seek and Safari plays at all.
+ */
+app.get("/admin/users/:userId/buckets/:bucketId/file/*", async (c) => {
+  const tenantRoot = await adminTenantRoot(c);
+  if (!tenantRoot)
+    return c.json({ error: "Not found", message: "Bucket not found" }, 404);
+
+  let filePath = new URL(c.req.url).pathname.replace(
+    /^\/admin\/users\/[^/]+\/buckets\/[^/]+\/file\//,
+    "",
+  );
+  try {
+    filePath = decodeURIComponent(filePath);
+  } catch {
+    // Malformed escape sequence - keep it as sent, matching extractFilePath.
+  }
+  if (!filePath)
+    return c.json(
+      { error: "Bad request", message: "File path is required" },
+      400,
+    );
+
+  const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
+  const isImage = IMAGE_EXTENSIONS.has(ext);
+  const wantsThumb =
+    c.req.query("thumb") === "1" && (isImage || VIDEO_EXTENSIONS.has(ext));
+  const bucket = c.env.MEDIA_BUCKET;
+  const wantsRange = c.req.raw.headers.has("Range");
+  try {
+    const object =
+      (wantsThumb
+        ? await bucket.get(
+            thumbnailCacheKey(`${tenantRoot}/${filePath}`, isImage),
+          )
+        : null) ??
+      (await r2.downloadOriginal(
+        bucket,
+        tenantRoot,
+        filePath,
+        wantsRange ? { range: c.req.raw.headers } : undefined,
+      ));
+    if (!object)
+      return c.json({ error: "Not found", message: "File not found" }, 404);
+
+    const headers = new Headers();
+    object.writeHttpMetadata(headers);
+    if (!headers.has("Content-Type"))
+      headers.set("Content-Type", "application/octet-stream");
+    // Private: this is one admin's browser, and the bytes must never land in
+    // a shared cache under a URL that only a cookie protects.
+    headers.set("Cache-Control", "private, max-age=3600");
+    headers.set("ETag", object.httpEtag);
+    headers.set("Accept-Ranges", "bytes");
+
+    // Same R2Range resolution as tryServeFromR2Cache in index.ts: a
+    // Content-Length that disagrees with the bytes sent hangs the player.
+    const range = wantsRange ? object.range : undefined;
+    if (range) {
+      const offset =
+        "offset" in range && range.offset !== undefined
+          ? range.offset
+          : object.size - ("suffix" in range ? range.suffix : 0);
+      const length =
+        "length" in range && range.length !== undefined
+          ? range.length
+          : object.size - offset;
+      headers.set("Content-Length", String(length));
+      headers.set(
+        "Content-Range",
+        `bytes ${offset}-${offset + length - 1}/${object.size}`,
+      );
+      return new Response(object.body, { status: 206, headers });
+    }
+    headers.set("Content-Length", String(object.size));
+    return new Response(object.body, { headers });
+  } catch (error) {
+    console.error("Failed to read file for admin", error);
+    return c.json({ error: "Failed to read file" }, 500);
+  }
+});
 
 /**
  * DELETE /admin/asset { ref } - legal takedown. `ref` is whatever the
@@ -1292,6 +1500,9 @@ app.post("/upload", async (c) => {
     c.executionCtx.waitUntil(
       c.env.USAGE_METER.get(c.env.USAGE_METER.idFromName(token.userId))
         .markApiUpload()
+        .then(
+          (first) => first && captureEvent("first_app_upload", token.userId),
+        )
         .catch((error) =>
           console.error(`Failed to mark API upload for ${token.userId}`, error),
         ),
@@ -1442,6 +1653,7 @@ app.post("/upload", async (c) => {
       captureEvent("asset_uploaded", userId, {
         files: uploaded.length,
         total_mb: totalMb,
+        via: token ? "presigned" : apiKeyFrom(c) ? "api_key" : "dashboard",
       }),
     );
     return c.json({ success: true, files: uploaded });

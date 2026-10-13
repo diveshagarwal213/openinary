@@ -15,6 +15,7 @@ import {
   LoadingRows,
   StatusBadge,
 } from "@/components/fields";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,8 +26,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDate } from "@/lib/utils";
-import { orpc } from "@/utils/orpc";
+import { formatBytes, formatDate } from "@/lib/utils";
+import { adminFetch, orpc } from "@/utils/orpc";
+
+const PAGE_SIZE = 50;
 
 export default function UsersPage() {
   const queryClient = useQueryClient();
@@ -39,16 +42,32 @@ export default function UsersPage() {
     const timer = setTimeout(() => setQuery(search), 250);
     return () => clearTimeout(timer);
   }, [search]);
+  // Pages of PAGE_SIZE; a new search starts from the first one.
+  const [offset, setOffset] = useState(0);
+  useEffect(() => setOffset(0), [query]);
 
   const { data, isPending, isFetching, dataUpdatedAt, error } = useQuery(
     orpc.admin.list.queryOptions({
-      input: { search: query || undefined },
+      input: { search: query || undefined, limit: PAGE_SIZE, offset },
       // Refining a search changes the key, which would otherwise empty the
       // table on every keystroke. The previous matches stay put, marked as
       // refreshing, until the narrower ones arrive.
       placeholderData: keepPreviousData,
     }),
   );
+
+  // Storage is asked for separately, after the list: it may have to scan R2
+  // for accounts whose snapshot is stale (see GET /admin/storage in
+  // worker/app.ts), and the names and states should not wait for that.
+  const ids = data?.users.map((account) => account.id) ?? [];
+  const { data: storage } = useQuery({
+    queryKey: ["admin", "storage-footprint", ids],
+    queryFn: () =>
+      adminFetch<Record<string, { bytes: number; files: number }>>(
+        `/admin/storage?users=${ids.join(",")}`,
+      ),
+    enabled: ids.length > 0,
+  });
 
   // The fiche reads four upstreams and is the slowest page here. Pointing at a
   // row is a good enough guess that it is about to be opened, and warming it
@@ -74,7 +93,7 @@ export default function UsersPage() {
           <HugeiconsIcon
             icon={Search01Icon}
             strokeWidth={2}
-            className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-3 size-4 text-muted-foreground"
+            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
           />
           <Input
             value={search}
@@ -106,6 +125,7 @@ export default function UsersPage() {
                   else. */}
               <TableHead className="hidden md:table-cell">Name</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead className="text-right">Storage</TableHead>
               <TableHead className="hidden text-right sm:table-cell">
                 Joined
               </TableHead>
@@ -149,6 +169,18 @@ export default function UsersPage() {
                     ) : null}
                   </div>
                 </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {storage?.[account.id] ? (
+                    <>
+                      {formatBytes(storage[account.id].bytes)}
+                      <span className="block text-muted-foreground text-xs">
+                        {storage[account.id].files.toLocaleString()} files
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">…</span>
+                  )}
+                </TableCell>
                 <TableCell className="hidden text-right text-muted-foreground tabular-nums sm:table-cell">
                   {formatDate(account.createdAt)}
                 </TableCell>
@@ -164,6 +196,31 @@ export default function UsersPage() {
           </div>
         ) : null}
       </Card>
+
+      {data && data.total > PAGE_SIZE ? (
+        <div className="flex items-center justify-end gap-2 text-muted-foreground text-sm tabular-nums">
+          <span>
+            {offset + 1}–{Math.min(offset + PAGE_SIZE, data.total)} of{" "}
+            {data.total}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={offset === 0}
+            onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+          >
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={offset + PAGE_SIZE >= data.total}
+            onClick={() => setOffset(offset + PAGE_SIZE)}
+          >
+            Next
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
