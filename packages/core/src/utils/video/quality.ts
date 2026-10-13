@@ -32,31 +32,46 @@ export const applyQuality: TransformFunction = (
         : quality
       : defaultQuality;
 
-  // Validate quality range (0-100)
-  if (isNaN(qualityValue) || qualityValue < 0 || qualityValue > 100) {
-    // Use default if invalid
-    const crf = Math.round(51 - (defaultQuality / 100) * 33);
-    return {
-      command: command
-        .videoCodec("libx264")
-        .addOption("-preset", "ultrafast") // Ultra fast preset for local dev
-        .addOption("-crf", crf.toString())
-        .audioCodec("copy"),
-    }; // Copy audio without re-encoding
-  }
+  const isValid =
+    !isNaN(qualityValue) && qualityValue >= 0 && qualityValue <= 100;
 
   // Convert quality (0-100) to CRF (51-0)
   // Higher quality = lower CRF
-  const crf = Math.round(51 - (qualityValue / 100) * 33);
+  const crf = Math.round(
+    51 - ((isValid ? qualityValue : defaultQuality) / 100) * 33,
+  );
 
-  return {
-    command: command
-      .videoCodec("libx264")
-      .addOption("-preset", "ultrafast")
+  // WebM only muxes VP8/VP9/AV1 video and Vorbis/Opus audio: libx264 with a
+  // copied AAC track fails at header write ("Only VP8 or VP9 or AV1 video and
+  // Vorbis or Opus audio ... are supported for WebM"), so every f_webm job
+  // errored within a second and was re-queued by the next request.
+  if (context.outputPath.toLowerCase().endsWith(".webm")) {
+    return command
+      .videoCodec("libvpx-vp9")
       .addOption("-crf", crf.toString())
-      .addOption("-tune", "fastdecode") // Optimize for fast decoding
-      .addOption("-profile:v", "baseline") // Use baseline profile for compatibility & speed
-      .addOption("-level", "3.0") // Lower level = simpler encoding
-      .audioCodec("copy"),
-  }; // Copy audio without re-encoding
+      .addOption("-b:v", "0") // Constant-quality mode, CRF alone drives the rate
+      .addOption("-deadline", "realtime") // VP9's ultrafast equivalent
+      .addOption("-cpu-used", "8")
+      .addOption("-row-mt", "1")
+      .audioCodec("libopus");
+  }
+
+  // Validate quality range (0-100)
+  if (!isValid) {
+    // Use default if invalid
+    return command
+      .videoCodec("libx264")
+      .addOption("-preset", "ultrafast") // Ultra fast preset for local dev
+      .addOption("-crf", crf.toString())
+      .audioCodec("copy"); // Copy audio without re-encoding
+  }
+
+  return command
+    .videoCodec("libx264")
+    .addOption("-preset", "ultrafast")
+    .addOption("-crf", crf.toString())
+    .addOption("-tune", "fastdecode") // Optimize for fast decoding
+    .addOption("-profile:v", "baseline") // Use baseline profile for compatibility & speed
+    .addOption("-level", "3.0") // Lower level = simpler encoding
+    .audioCodec("copy"); // Copy audio without re-encoding
 };

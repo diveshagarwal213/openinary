@@ -7,6 +7,23 @@ import {
   VideoFormat,
 } from "../types";
 
+/**
+ * The request path as a storage key. Hono's c.req.path is only decodeURI'd,
+ * which leaves reserved characters (, & @ + = ; : $) percent-encoded, while
+ * every write path stores keys fully decoded: "a, b.png" requested as
+ * /t/a%2C%20b.png was looked up as "a%2C b.png" and 404'd. Same second pass
+ * the storage and download routes already apply. Safe on an already-decoded
+ * path because Hono keeps "%25" encoded, so a literal "%" is only decoded once.
+ */
+export const decodeRequestPath = (path: string): string => {
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    // Malformed escape sequence: keep it as sent, like the storage routes.
+    return path;
+  }
+};
+
 export const parseParams = (path: string) => {
   const segments = path.split("/");
   const params: CombindedTransformParams = {};
@@ -42,8 +59,8 @@ const TRANSFORM_VALUE_PATTERNS: Readonly<Record<TransformKey, RegExp>> = {
   ar: /^\d+:\d+$|^\d+(?:\.\d+)?$/,
   b: /^(transparent|white|black|rgb:[0-9a-fA-F]{3,8}|#?[0-9a-fA-F]{3,8})$/,
   bg: /^(transparent|white|black|rgb:[0-9a-fA-F]{3,8}|#?[0-9a-fA-F]{3,8})$/,
-  x: /^\d+$|^0?\.\d+$|^\d+p$/,   // crop x offset: integer, decimal (0.0–1.0), or percentage (e.g. 30p)
-  y: /^\d+$|^0?\.\d+$|^\d+p$/,   // crop y offset: same as x
+  x: /^\d+$|^0?\.\d+$|^\d+p$/, // crop x offset: integer, decimal (0.0–1.0), or percentage (e.g. 30p)
+  y: /^\d+$|^0?\.\d+$|^\d+p$/, // crop y offset: same as x
   so: /^\d+(?:\.\d+)?$/,
   eo: /^\d+(?:\.\d+)?$/,
   t: /^(true|1|\d+)$/,
@@ -271,7 +288,10 @@ const parseTransform = (segment: string): CombindedTransformParams => {
         try {
           if (typeof value === "string" && value.endsWith("p")) {
             params.overlayXOffset = value;
-          } else if (typeof value === "string" && (value.startsWith("0.") || value.includes("."))) {
+          } else if (
+            typeof value === "string" &&
+            (value.startsWith("0.") || value.includes("."))
+          ) {
             const num = parseFloat(value);
             params.overlayXOffset = `${num * 100}p`;
           } else {
@@ -287,7 +307,10 @@ const parseTransform = (segment: string): CombindedTransformParams => {
         try {
           if (typeof value === "string" && value.endsWith("p")) {
             params.overlayYOffset = value;
-          } else if (typeof value === "string" && (value.startsWith("0.") || value.includes("."))) {
+          } else if (
+            typeof value === "string" &&
+            (value.startsWith("0.") || value.includes("."))
+          ) {
             const num = parseFloat(value);
             params.overlayYOffset = `${num * 100}p`;
           } else {

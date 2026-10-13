@@ -34,6 +34,14 @@ import {
 const isVideo = (ext: string | undefined): ext is string =>
   !!ext && VIDEO_FORMATS.has(ext);
 
+const isRecoverableJpegError = (error: unknown, ext: string | undefined) => {
+  if (!ext?.match(/^jpe?g$/i)) return false;
+  const message = error instanceof Error ? error.message : String(error);
+  return /VipsJpeg:\s*Invalid SOS parameters for sequential JPEG/i.test(
+    message,
+  );
+};
+
 // Types for the service
 export interface TransformRequest {
   path: string;
@@ -115,6 +123,19 @@ export class TransformService {
       if (!fileCheck.exists) {
         await this.handleFileNotFound(filePath);
         throw new Error(fileCheck.error || "File not found");
+      }
+
+      // A bare /t/<path> URL delivers the untouched original for any stored type
+      // (video, audio, 3D). Images always carry an auto-selected format at this
+      // point, so they keep optimizing; transcoding only happens when the URL
+      // asks for it, either with explicit parameters or with q_auto.
+      if (Object.keys(effectiveParams).length === 0) {
+        return await this.streamOriginal(
+          filePath,
+          localPath,
+          ext ?? "",
+          sourceUrl,
+        );
       }
 
       // Check caches
@@ -304,6 +325,33 @@ export class TransformService {
       );
     }
 
+    const isTransformableImage = !!ext?.match(/jpe?g|png|webp|avif|gif|psd/);
+
+    // Reached only when effectiveParams is non-empty - the bare-URL case
+    // short-circuits to streamOriginal above. A transform was requested on a
+    // type nothing here knows how to transform (audio, 3D, or any other
+    // stored-original type, e.g. /t/w_500/doc.pdf). Reject before staging the
+    // source file rather than downloading it only to throw the params away:
+    // silently dropping the params and serving the original would also hide
+    // a bug in whatever built this URL, so this fails loud and points at the
+    // URL that actually works.
+    if (!isTransformableImage && !isVideo(ext)) {
+      const message =
+        (ext ? "." + ext : "This file type") +
+        " can't be transformed. Request /t/" +
+        filePath +
+        " for the original.";
+      return {
+        buffer: Buffer.from(message),
+        contentType: "text/plain",
+        status: 400,
+        headers: {
+          "Content-Length": Buffer.byteLength(message).toString(),
+          "Cache-Control": "no-store",
+        },
+      };
+    }
+
     // Prepare source file
     const sourcePath = await prepareSourceFile(
       this.storage,
@@ -330,22 +378,50 @@ export class TransformService {
       let contentType: string;
       let optimizationResult: any;
 
-      // Process based on file type
-      if (ext?.match(/jpe?g|png|webp|avif|gif|psd/)) {
-        const result = await this.processImageFile(
-          sourcePath,
-          effectiveParams,
-          userAgent,
-          acceptHeader,
-        );
+      // Process based on file type. isTransformableImage / isVideo(ext) are
+      // the only two possibilities here: anything else already returned a
+      // 400 above, before this file was staged.
+      if (isTransformableImage) {
+        let result: Awaited<ReturnType<TransformService["processImageFile"]>>;
+        try {
+          result = await this.processImageFile(
+            sourcePath,
+            effectiveParams,
+            userAgent,
+            acceptHeader,
+          );
+        } catch (error) {
+          // Some camera JPEGs are browser-readable but rejected by libjpeg's
+          // strict SOS validation. Do not make the uploaded original
+          // unreachable: serve it untouched, without writing it into the
+          // transformed cache under a misleading key.
+          if (!isRecoverableJpegError(error, ext)) throw error;
+          const fallback = await this.streamOriginal(
+            filePath,
+            localPath,
+            ext ?? "jpg",
+            sourceUrl,
+          );
+          fallback.headers["Cache-Control"] = "no-store";
+          fallback.headers["X-Transform-Fallback"] = "original";
+          logger.warn(
+            { error: serializeError(error), filePath },
+            "JPEG transform failed; serving original",
+          );
+          return fallback;
+        }
         buffer = result.buffer;
         contentType = result.contentType;
         optimizationResult = result.optimizationResult;
-      } else if (isVideo(ext)) {
+      } else {
         // Only thumbnail requests reach this point (non-thumbnail video
         // transformations are intercepted before prepareSourceFile above);
         // thumbnails are extracted synchronously like images
-        const result = await processVideo(sourcePath, effectiveParams, this.storage);
+        const result = await processVideo(
+          sourcePath,
+          effectiveParams,
+          this.storage,
+        );
         return {
           buffer: result.buffer,
           contentType: result.contentType,
@@ -354,8 +430,6 @@ export class TransformService {
             "Cache-Control": "public, max-age=31536000, must-revalidate",
           },
         };
-      } else {
-        throw new Error("Unsupported file type");
       }
 
       // Save to caches
@@ -558,9 +632,10 @@ export class TransformService {
   /**
    * Stream the untouched original without buffering it in memory: originals can
    * weigh hundreds of MB and buffering both delays the first byte and pressures
-   * the container memory while ffmpeg jobs are running.
+   * the container memory while ffmpeg jobs are running. Serves any stored type
+   * (video, audio, 3D, image) with its real content-type.
    */
-  private async streamOriginalVideo(
+  private async streamOriginal(
     filePath: string,
     localPath: string,
     ext: string,
@@ -570,10 +645,12 @@ export class TransformService {
     // ByteString, and raw file paths can contain non-ASCII or NFD-decomposed
     // accented characters (e.g. a combining accent has a code point > 255)
     const headers: Record<string, string> = {
-      "X-Video-Status": "original",
       "Cache-Control": "public, max-age=31536000, must-revalidate",
       ETag: `"${encodeURIComponent(filePath)}-original"`,
     };
+    if (isVideo(ext)) {
+      headers["X-Video-Status"] = "original";
+    }
 
     try {
       let stream: ReadableStream<Uint8Array>;
@@ -609,9 +686,9 @@ export class TransformService {
     } catch (error) {
       logger.error(
         { error: serializeError(error), filePath },
-        "Failed to serve original video",
+        "Failed to serve original",
       );
-      throw new Error("Failed to load video");
+      throw new Error("Failed to load original");
     }
   }
 

@@ -20,9 +20,6 @@
 
 **For documentation and more examples, please visit https://docs.openinary.dev.**
 
-> [!TIP]
-> **☁️ Openinary Cloud is in public alpha.** Same engine, hosted for you. Sign up and start on the free plan, no card required. [Try it →](https://app.openinary.dev)
-
 > [!WARNING]
 > Please keep in mind that Openinary is still under active development
 > and therefore full backward compatibility is not guaranteed before reaching v1.0.0.
@@ -30,7 +27,7 @@
 ## Quick Start
 
 <p align="left">
-    <a href="https://railway.com/deploy/openinary-1?referralCode=imHr5N&utm_medium=integration&utm_source=template&utm_campaign=generic" target="_blank" rel="noopener" style="display: inline-block;"><img src="https://www.openinary.dev/deploy/railway.svg" alt="Deploy with Railway" style="display: block;" /></a>&nbsp;&nbsp;<a href="https://docs.openinary.dev/guides/coolify-deployment" target="_blank" rel="noopener" style="display: inline-block;"><img src="https://www.openinary.dev/deploy/coolify.svg" alt="Deploy with Coolify" style="display: block;" /></a>&nbsp;&nbsp;<a href="https://docs.openinary.dev/guides/dokploy-deployment" target="_blank" rel="noopener" style="display: inline-block;"><img src="https://www.openinary.dev/deploy/dokploy.svg" alt="Deploy with Dokploy" style="display: block;" /></a>
+    <a href="https://railway.com/deploy/openinary-1?referralCode=imHr5N&utm_medium=integration&utm_source=template&utm_campaign=generic" target="_blank" rel="noopener" style="display: inline-block;"><img src="https://www.openinary.dev/deploy/railway.svg" alt="Deploy with Railway" style="display: block;" /></a>&nbsp;&nbsp;<a href="https://docs.openinary.dev/guides/coolify-deployment" target="_blank" rel="noopener" style="display: inline-block;"><img src="https://www.openinary.dev/deploy/coolify.svg" alt="Deploy with Coolify" style="display: block;" /></a>&nbsp;&nbsp;<a href="https://docs.openinary.dev/guides/dokploy-deployment" target="_blank" rel="noopener" style="display: inline-block;"><img src="https://www.openinary.dev/deploy/dokploy.svg" alt="Deploy with Dokploy" style="display: block;" /></a>&nbsp;&nbsp;<a href="https://app.openinary.dev" target="_blank" rel="noopener" style="display: inline-block;"><img src="https://www.openinary.dev/deploy/cloud.svg" alt="Use Openinary Cloud" style="display: block;" /></a>
 </p>
 
 ### Installation
@@ -132,5 +129,30 @@ STORAGE_PUBLIC_URL=https://your-cdn-domain.com
 
 [Full Documentation](https://docs.openinary.dev) | [Issues](https://github.com/openinary/openinary/issues) | [Contact](https://x.com/initflorian)
 
+## Repository layout
+
+This repository holds the self-hosted product and the managed Cloud service side
+by side, so a fix to the shared engine reaches both without a release in between.
+
+```
+apps/api  apps/web  apps/telemetry   the self-hosted product
+apps/cloud                           Openinary Cloud (server, web, admin)
+apps/marketing  apps/docs            openinary.dev and its documentation
+packages/                            core, ui, cli, registry, shared
+```
+
+See [Project Structure](https://docs.openinary.dev/project-structure) for the
+full tour.
+
 ## License
-This project is licensed under the  AGPL-3.0 License - see the [LICENSE](LICENSE) file for details.
+
+Everything in this repository is **AGPL-3.0** — see [LICENSE](LICENSE) — with two
+exceptions:
+
+- **`apps/cloud/`** is the managed Cloud service. It is source-available, not
+  open source: read it, audit it, contribute to it, but running it needs a
+  written agreement. See [apps/cloud/LICENSE](apps/cloud/LICENSE).
+- **`apps/marketing/`** (the website) is MIT.
+
+Self-hosting Openinary needs nothing from `apps/cloud/`. The AGPL parts are the
+whole product.

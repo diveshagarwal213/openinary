@@ -1,0 +1,157 @@
+---
+title: "Transform Media"
+description: "Resize, crop, convert and trim media by putting parameters in the URL"
+---
+
+Put comma-separated parameters between `/t/` and the file path. The first request renders and caches the result, the rest are served from cache.
+
+```
+GET /t/{transformations}/{path}
+```
+
+```http
+GET /t/w_800,h_600,c_fill,f_webp/photos/portrait.jpg
+```
+
+Drop the parameters to get the stored original back untouched: `GET /t/photos/portrait.jpg`.
+
+**Auth:** public, rate limited. For URLs that cannot be guessed or edited, use [signed URLs](/api-reference/media/authenticated-transform), which are self-hosted only.
+
+On Cloud the same path sits behind a bucket prefix, `/b/{bucketId}/t/...`. See [your base URL](/media-transformations/overview#your-base-url). Everything after it is identical.
+
+## Recipes
+
+| Goal | URL |
+| --- | --- |
+| Resize | `/t/w_800,h_600/image.jpg` |
+| Avatar, cropped on the subject | `/t/w_400,h_400,c_fill,g_face/portrait.jpg` |
+| Circular avatar | `/t/w_400,h_400,c_fill,r_max,f_png/avatar.jpg` |
+| Rounded corners on a white page | `/t/w_600,h_400,r_16,b_rgb:ffffff/photo.jpg` |
+| 16:9 banner | `/t/ar_16:9,w_1920/banner.jpg` |
+| Padded to a fixed size | `/t/w_400,h_300,c_pad,b_rgb:f5f5f5/thumb.jpg` |
+| Smallest file the browser supports | `/t/w_1200/photo.jpg` |
+| 720p video | `/t/w_1280,h_720,q_80/video.mp4` |
+| Trim 5s to 12s | `/t/so_5,eo_12/video.mp4` |
+| Video poster frame | `/t/t_true,tt_5,f_webp,w_500/video.mp4` |
+
+## Image parameters
+
+| Param | Values | Default | Notes |
+| --- | --- | --- | --- |
+| `w` | integer | | Width in pixels |
+| `h` | integer | | Height in pixels |
+| `c` | `fill` `fit` `scale` `crop` `pad` | `fill` | `fill` crops the overflow, `fit` preserves ratio, `scale` may stretch, `pad` adds borders in `b` |
+| `ar` | `W:H` | | Aspect ratio, e.g. `ar_16:9` |
+| `a` | `-360` to `360`, or `auto` | | Rotate. `auto` follows EXIF orientation |
+| `g` | `center` `north` `south` `east` `west` `face` `auto` | `center` | Focal point when cropping |
+| `b` | `rgb:<hex>` `#<hex>` `transparent` `white` `black` | | Fill color for `c_pad`, rotation and rounded corners. Alias `bg` |
+| `r` | integer, `v1:v2`, `v1:v2:v3`, `v1:v2:v3:v4`, or `max` | | Corner radius, clockwise from top-left. `max` gives a circle or oval |
+| `q` | `1` to `100`, or `auto` | `auto` | See [quality](#quality) |
+| `f` | `avif` `webp` `jpeg` `png` `gif` `auto` | browser's best | See [formats](#formats) |
+
+`g_face` uses saliency detection, not face detection. It keeps whatever region scores as most interesting, which on a portrait is normally the face.
+
+Corner radius is clamped to half the shorter side. Cut corners are transparent, so pair `r` with `f_png`, `f_webp` or `f_avif`, or add `b` to fill them and stay on JPEG.
+
+### Quality
+
+Leave `q` unset and each format gets the quality it deserves: 80 for AVIF, 85 for WebP, 90 for JPEG, 100 for PNG. Large files shift a few points, clamped to 70-95. An explicit `1` to `100` is used as given.
+
+### Formats
+
+Omit `f` and Openinary picks the best format the browser accepts, in order AVIF, WebP, then JPEG or PNG. `f_auto` goes further: it encodes every supported candidate, compares byte counts and serves the smallest, at the cost of a slower first request.
+
+**Input:** JPEG, PNG, WebP, AVIF, GIF (first frame), HEIC/HEIF (converted to JPEG at upload), PSD (layers composited)
+
+**Output:** AVIF, WebP, JPEG, PNG, GIF
+
+## Video parameters
+
+| Param | Values | Default | Notes |
+| --- | --- | --- | --- |
+| `w` | integer | | Width in pixels |
+| `h` | integer | | Height in pixels |
+| `c` | `fill` `crop` `fit` `scale` `pad` | `fill` | Requires `w` or `h` |
+| `q` | `1` to `100`, or `auto` | `60` | CRF is `round(51 - q / 100 * 33)`, so `q_60` is CRF 31 |
+| `so` | seconds | | Start offset |
+| `eo` | seconds | | End offset, exclusive. `so_5,eo_12` is a 7s clip |
+| `f` | `mp4` `webm` `mov`, or an image format | `mp4` | An image format extracts a frame |
+| `t` | `t_true` | `false` | Extract one frame as an image instead of transcoding |
+| `tt` | seconds | `0` | Which frame to extract, with `t` |
+
+A bare `/t/clip.mp4` streams the original untouched. Add `q_auto` to opt into the default encode without choosing a CRF.
+
+The default `q_60` favors encoding speed over file size, which is what makes large sources viable. Raise it when output quality matters more than job time.
+
+Videos also apply fixed limits: 720p maximum when you request no explicit `w` or `h`, a 200 MB cap on the source, and a 5 minute encode timeout. See [video processing](/configuration/video-processing).
+
+**Input:** MP4 (H.264/H.265), MOV, WebM (VP8/VP9) · **Output:** MP4, WebM, MOV
+
+<Warning>
+  A video transformation that is not cached yet answers `202` with a
+  `statusUrl`, not the original. Poll that URL until it reports `completed`,
+  then request the transform again. Keep its transformation segment: jobs are
+  keyed on the path **and** its parameters. For assets you know you will serve,
+  [prewarm at upload](/media-transformations/upload-and-prewarm) so the first
+  visitor never sees the `202`.
+</Warning>
+
+## Pass-through formats
+
+Audio and 3D files are stored and delivered, never transformed. Request them with no transformation segment and the stored bytes come back untouched, as in `GET /t/audio/podcast.mp3` or `GET /t/models/duck.glb`.
+
+| Kind | Extensions |
+| --- | --- |
+| Audio | `wav` `mp3` `ogg` |
+| 3D | `glb` `gltf` |
+
+Adding parameters to one returns `400` rather than the original, so a "resized" variant that is really the untouched file never gets cached.
+
+## Response
+
+Returns the binary content, with `Cache-Control` set for browser caching and `X-Content-Type-Options: nosniff`. The content type comes from the extension via the shared media table, never from sniffing the body, which is why uploads are validated by content in the first place.
+
+| Code | Meaning |
+| --- | --- |
+| `200` | File returned |
+| `202` | Video transformation still processing. Body carries `statusUrl`, response carries `Retry-After` |
+| `400` | Transformation parameters on a non-transformable type |
+| `404` | File not found |
+| `500` | Processing error |
+
+## Gotchas
+
+Only the short parameter keys work. The parser splits a segment at its first underscore, so `thumbnail_time_5` reads as the key `thumbnail`, fails, and the segment is then treated as a folder name, ending in a `404`.
+
+Video URLs accept the image-only parameters `a`, `ar`, `r` and `b` and silently ignore them. The URL still works, the output is just re-encoded without them.
+
+For compatibility with Cloudinary-shaped URLs, `c` also accepts `lfill`, `fill_pad`, `limit`, `mfit`, `thumb` and `lpad`, and `g` also accepts `c`, `n`, `s`, `e`, `w`, `faces`, `face_center`, `faces_center`, `north_center` and `south_center`.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card
+    title="Authenticated Transform"
+    icon="lock"
+    href="/api-reference/media/authenticated-transform"
+  >
+    Signed URLs that cannot be guessed or edited.
+  </Card>
+  <Card title="Upload Files" icon="upload" href="/api-reference/files/upload">
+    Upload media and pre-generate variants.
+  </Card>
+  <Card
+    title="Video Status"
+    icon="video"
+    href="/api-reference/video/status"
+  >
+    Poll a queued video transformation.
+  </Card>
+  <Card
+    title="Automatic Format Selection"
+    icon="wand-magic-sparkles"
+    href="/media-transformations/intelligent-compression"
+  >
+    How the default format and quality are chosen.
+  </Card>
+</CardGroup>

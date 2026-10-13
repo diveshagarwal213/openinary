@@ -1,7 +1,8 @@
 # @openinary registry
 
 The shadcn/ui registry for Openinary components. Source lives here; the built
-JSON in [`/r`](../../r) is published to `https://openinary.dev/r/{name}.json`.
+JSON is written to `apps/marketing/public/r` (generated, not committed) and
+served at `https://openinary.dev/r/{name}.json`.
 
 ## Items
 
@@ -27,13 +28,13 @@ pnpm dlx shadcn@latest add @openinary/file-uploader
 pnpm dlx shadcn@latest add @openinary/upload-token
 ```
 
-Full guide: <https://openinary.dev/docs/guides/file-uploader>
+Full guide: <https://docs.openinary.dev/guides/file-uploader>
 
 ## Development
 
 ```bash
 pnpm --filter registry type-check    # type-check the source (uses local stubs)
-pnpm --filter registry registry:build # rebuild ../../r from registry.json
+pnpm --filter registry registry:build # rebuild apps/marketing/public/r from registry.json
 ```
 
 - `src/file-uploader/`, the component (`file-uploader.tsx`) and upload engine
@@ -41,9 +42,11 @@ pnpm --filter registry registry:build # rebuild ../../r from registry.json
   `@/lib/utils`) that the shadcn CLI rewrites on install.
 - `src/upload-token/upload-token.ts`, thin client for `POST /upload/sign`
   (`apps/api/src/routes/upload.ts`). It does not compute any signature itself,
-  Openinary does, via `apps/api/src/utils/upload-signature.ts`, so there is
+  Openinary does, via `packages/core/src/utils/upload-signature.ts`, so there is
   nothing to keep byte-compatible here.
 - `src/stubs/`, type-check-only stand-ins for the consumer's shadcn components;
   **not** part of the registry output.
 
-After changing any source file, rebuild and commit `/r`, CI fails if it is stale.
+The built output is not committed: `apps/marketing`'s `prebuild` runs
+`registry:build`, so `public/r` is regenerated from source on every build
+and deploy.

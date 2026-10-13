@@ -9,6 +9,7 @@ import { applyOverlayImage } from "./overlay";
 import { applyExtract } from "./extract";
 import { applyResize } from "./resize";
 import { ImageTransformParams } from "../../types";
+import { SHARP_INPUT_OPTIONS } from "./sharp-options";
 
 // Re-export types for backward compatibility
 export * from "./types";
@@ -40,7 +41,7 @@ export const transformImage = async (
 ): Promise<Buffer> => {
   let image = inputPath.toLowerCase().endsWith(".psd")
     ? await decodePsd(inputPath)
-    : sharp(inputPath);
+    : sharp(inputPath, SHARP_INPUT_OPTIONS);
 
   // 1. Apply rotation (if specified)
   if (params.rotate) {
